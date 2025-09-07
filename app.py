@@ -5,7 +5,6 @@ import threading
 import binascii
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-import google.protobuf as protobuf
 import aiohttp
 import asyncio
 import urllib3
@@ -14,10 +13,8 @@ import os
 import time
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Import protobuf modules
-import CWSpam_count_pb2
-import uid_generator_pb2
-import CSVisit_count_pb2
+# Import the combined protobuf module
+import CWVisit_CWSpam_pb2
 
 app = Flask(__name__)
 
@@ -144,8 +141,8 @@ def get_player_info(uid, region, token):
         response = requests.post(url, headers=headers, data=bytes.fromhex(encrypted_payload), timeout=10)
         
         if response.status_code == 200:
-            # Parse the protobuf response
-            player_info = CWSpam_count_pb2.Info()
+            # Parse the protobuf response using the combined protobuf
+            player_info = CWVisit_CWSpam_pb2.Info()
             player_info.ParseFromString(response.content)
             return player_info
         else:
@@ -188,9 +185,10 @@ def send_friend_request(uid, token, region, results):
 
 def create_protobuf(uid):
     try:
-        message = uid_generator_pb2.uid_generator()
-        message.ujjaiwal_ = int(uid)
-        message.garena = 1
+        # Create a simple protobuf-like structure using the combined protobuf
+        message = CWVisit_CWSpam_pb2.Info()
+        message.AccountInfo.UID = int(uid)
+        message.AccountInfo.garena = 1
         return message.SerializeToString()
     except Exception as e:
         return None
@@ -235,7 +233,7 @@ async def make_request_async(encrypt, region, token, session):
 
 def decode_protobuf(binary):
     try:
-        items = CSVisit_count_pb2.Info()
+        items = CWVisit_CWSpam_pb2.Info()
         items.ParseFromString(binary)
         return items
     except Exception as e:
@@ -334,7 +332,7 @@ async def visit():
             responses = await asyncio.gather(*tasks, return_exceptions=True)
             
             for response in responses:
-                if response and isinstance(response, CSVisit_count_pb2.Info):
+                if response and isinstance(response, CWVisit_CWSpam_pb2.Info):
                     success_count += 1
                     # Extract player info from the first successful response
                     if player_name is None:
