@@ -1,84 +1,82 @@
 from flask import Flask, request, jsonify
-import asyncio
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad
-from google.protobuf.json_format import MessageToJson
-import binascii
-import aiohttp
 import requests
 import json
-import like_pb2
-import like_count_pb2
-import uid_generator_pb2
-from google.protobuf.message import DecodeError
+import threading
+import binascii
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+import google.protobuf as protobuf
+import aiohttp
+import asyncio
+import urllib3
 from datetime import datetime, timedelta
-from pymongo import MongoClient
-from bson.objectid import ObjectId
-import secrets
-import string
-from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
+import os
+import time
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Import protobuf modules
+import CWSpam_count_pb2
+import uid_generator_pb2
+import CSVisit_count_pb2
 
 app = Flask(__name__)
 
-# MongoDB configuration
-client = MongoClient("mongodb+srv://dk5801690:PWCzVm5tOCixMpAD@cluster0.yxu5vet.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
-db = client.yourdb
-keys_collection = db.api_keys
-
-# Initialize scheduler for daily reset
-scheduler = BackgroundScheduler(daemon=True)
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
-
-def reset_remaining_requests():
-    """Reset remaining requests for all active keys to their total_requests"""
-    try:
-        now = datetime.now()
-        active_keys = keys_collection.find({
-            "is_active": True,
-            "expires_at": {"$gt": now}
-        })
-        
-        for key in active_keys:
-            keys_collection.update_one(
-                {"_id": key["_id"]},
-                {
-                    "$set": {
-                        "remaining_requests": key["total_requests"],
-                        "last_reset": now
-                    }
-                }
-            )
-        app.logger.info(f"Successfully reset requests at {now}")
-    except Exception as e:
-        app.logger.error(f"Error in reset_remaining_requests: {e}")
-
-# Schedule daily reset at midnight
-scheduler.add_job(
-    reset_remaining_requests,
-    'cron',
-    hour=0,
-    minute=0,
-    second=0,
-    timezone='UTC'
-)
-
-def load_tokens(server_name):
-    try:
-        if server_name == "IND":
-            with open("token_ind.json", "r") as f:
-                tokens = json.load(f)
-        elif server_name in {"BR", "US", "SAC", "NA"}:
-            with open("token_br.json", "r") as f:
-                tokens = json.load(f)
+# Encryption functions from byte.py integrated directly
+def Encrypt_ID(x):
+    x = int(x)
+    dec = ['80', '81', '82', '83', '84', '85', '86', '87', '88', '89', '8a', '8b', '8c', '8d', '8e', '8f', '90', '91', '92', '93', '94', '95', '96', '97', '98', '99', '9a', '9b', '9c', '9d', '9e', '9f', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'aa', 'ab', 'ac', 'ac', 'ae', 'af', 'b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'ba', 'bb', 'bc', 'bd', 'be', 'bf', 'c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'ca', 'cb', 'cc', 'cd', 'ce', 'cf', 'd0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'da', 'db', 'dc', 'dd', 'de', 'df', 'e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8', 'e9', 'ea', 'eb', 'ec', 'ed', 'ee', 'ef', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'fa', 'fb', 'fc', 'fd', 'fe', 'ff']
+    xxx = ['1','01', '02', '03', '04', '05', '06', '07', '08', '09', '0a', '0b', '0c', '0d', '0e', '0f', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '1a', '1b', '1c', '1d', '1e', '1f', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '2a', '2b', '2c', '2d', '2e', '2f', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '3a', '3b', '3c', '3d', '3e', '3f', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '4a', '4b', '4c', '4d', '4e', '4f', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '5a', '5b', '5c', '5d', '5e', '5f', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69', '6a', '6b', '6c', '6d', '6e', '6f', '70', '71', '72', '73', '74', '75', '76', '77', '78', '79', '7a', '7b', '7c', '7d', '7e', '7f']
+    
+    x = x/128 
+    if x > 128:
+        x = x/128
+        if x > 128:
+            x = x/128
+            if x > 128:
+                x = x/128
+                strx = int(x)
+                y = (x - strx) * 128
+                stry = str(int(y))
+                z = (y - int(stry)) * 128
+                strz = str(int(z))
+                n = (z - int(strz)) * 128
+                strn = str(int(n))
+                m = (n - int(strn)) * 128
+                return dec[int(m)] + dec[int(n)] + dec[int(z)] + dec[int(y)] + xxx[int(x)]
+            else:
+                strx = int(x)
+                y = (x - strx) * 128
+                stry = str(int(y))
+                z = (y - int(stry)) * 128
+                strz = str(int(z))
+                n = (z - int(strz)) * 128
+                strn = str(int(n))
+                return dec[int(n)] + dec[int(z)] + dec[int(y)] + xxx[int(x)]
         else:
-            with open("token_bd.json", "r") as f:
-                tokens = json.load(f)
-        return tokens
-    except Exception as e:
-        app.logger.error(f"Error loading tokens for server {server_name}: {e}")
-        return None
+            strx = int(x)
+            y = (x - strx) * 128
+            stry = str(int(y))
+            z = (y - int(stry)) * 128
+            strz = str(int(z))
+            return dec[int(z)] + dec[int(y)] + xxx[int(x)] 
+    else:
+        strx = int(x)
+        if strx == 0:
+            y = (x - strx) * 128
+            inty = int(y)
+            return xxx[inty]
+        else:
+            y = (x - strx) * 128
+            stry = str(int(y))
+            return dec[int(y)] + xxx[int(x)]
+
+def encrypt_api(plain_text):
+    plain_text = bytes.fromhex(plain_text)
+    key = bytes([89, 103, 38, 116, 99, 37, 68, 69, 117, 104, 54, 37, 90, 99, 94, 56])
+    iv = bytes([54, 111, 121, 90, 68, 114, 50, 50, 69, 51, 121, 99, 104, 106, 77, 37])
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    cipher_text = cipher.encrypt(pad(plain_text, AES.block_size))
+    return cipher_text.hex()
 
 def encrypt_message(plaintext):
     try:
@@ -89,76 +87,112 @@ def encrypt_message(plaintext):
         encrypted_message = cipher.encrypt(padded_message)
         return binascii.hexlify(encrypted_message).decode('utf-8')
     except Exception as e:
-        app.logger.error(f"Error encrypting message: {e}")
         return None
 
-def create_protobuf_message(user_id, region):
+def load_tokens(region):
     try:
-        message = like_pb2.like()
-        message.uid = int(user_id)
-        message.region = region
-        return message.SerializeToString()
+        if region == "IND":
+            with open("token_ind.json", "r") as f:
+                data = json.load(f)
+                tokens = [item["token"] for item in data]
+        elif region in {"BR", "US", "SAC", "NA"}:
+            with open("token_br.json", "r") as f:
+                data = json.load(f)
+                tokens = [item["token"] for item in data]
+        else:
+            with open("token_bd.json", "r") as f:
+                data = json.load(f)
+                tokens = [item["token"] for item in data]
+        return tokens
     except Exception as e:
-        app.logger.error(f"Error creating protobuf message: {e}")
-        return None
+        print(f"Error loading tokens for {region}: {e}")
+        return []
 
-async def send_request(encrypted_uid, token, url):
+def get_region_url(server_name, endpoint):
+    if server_name == "IND":
+        url = "https://client.ind.freefiremobile.com"
+    elif server_name in {"BR", "US", "SAC", "NA"}:
+        url = "https://client.us.freefiremobile.com"
+    else:
+        url = "https://clientbp.ggblueshark.com"
+    
+    return f"{url}/{endpoint}"
+
+def get_player_info(uid, region, token):
+    """Get actual player information using GetPlayerPersonalShow endpoint"""
     try:
-        edata = bytes.fromhex(encrypted_uid)
+        # Create payload for GetPlayerPersonalShow
+        encrypted_id = Encrypt_ID(uid)
+        payload = f"08{encrypted_id}10a7c4839f1e1801"
+        encrypted_payload = encrypt_api(payload)
+        
+        url = get_region_url(region, "GetPlayerPersonalShow")
         headers = {
-            'User-Agent': "Dalvik/2.1.0 (Linux; U; Android 9; ASUS_Z01QD Build/PI)",
-            'Connection': "Keep-Alive",
-            'Accept-Encoding': "gzip",
-            'Authorization': f"Bearer {token}",
-            'Content-Type': "application/x-www-form-urlencoded",
-            'Expect': "100-continue",
-            'X-Unity-Version': "2018.4.11f1",
-            'X-GA': "v1 1",
-            'ReleaseVersion': "OB50"
+            "Expect": "100-continue",
+            "Authorization": f"Bearer {token}",
+            "X-Unity-Version": "2018.4.11f1",
+            "X-GA": "v1 1",
+            "ReleaseVersion": "OB50",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Length": "16",
+            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SM-N975F Build/PI)",
+            "Host": "clientbp.ggblueshark.com",
+            "Connection": "close",
+            "Accept-Encoding": "gzip, deflate, br"
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=edata, headers=headers) as response:
-                if response.status != 200:
-                    app.logger.error(f"Request failed with status code: {response.status}")
-                    return response.status
-                return await response.text()
+        
+        response = requests.post(url, headers=headers, data=bytes.fromhex(encrypted_payload), timeout=10)
+        
+        if response.status_code == 200:
+            # Parse the protobuf response
+            player_info = CWSpam_count_pb2.Info()
+            player_info.ParseFromString(response.content)
+            return player_info
+        else:
+            print(f"Failed to get player info: {response.status_code}")
+            return None
     except Exception as e:
-        app.logger.error(f"Exception in send_request: {e}")
+        print(f"Error getting player info: {e}")
         return None
 
-async def send_multiple_requests(uid, server_name, url):
+def send_friend_request(uid, token, region, results):
     try:
-        region = server_name
-        protobuf_message = create_protobuf_message(uid, region)
-        if protobuf_message is None:
-            app.logger.error("Failed to create protobuf message.")
-            return None
-        encrypted_uid = encrypt_message(protobuf_message)
-        if encrypted_uid is None:
-            app.logger.error("Encryption failed.")
-            return None
-        tasks = []
-        tokens = load_tokens(server_name)
-        if tokens is None:
-            app.logger.error("Failed to load tokens.")
-            return None
-        for i in range(100):
-            token = tokens[i % len(tokens)]["token"]
-            tasks.append(send_request(encrypted_uid, token, url))
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        return results
+        encrypted_id = Encrypt_ID(uid)
+        payload = f"08a7c4839f1e10{encrypted_id}1801"
+        encrypted_payload = encrypt_api(payload)
+
+        url = get_region_url(region, "RequestAddingFriend")
+        headers = {
+            "Expect": "100-continue",
+            "Authorization": f"Bearer {token}",
+            "X-Unity-Version": "2018.4.11f1",
+            "X-GA": "v1 1",
+            "ReleaseVersion": "OB50",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Length": "16",
+            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SM-N975F Build/PI)",
+            "Host": "clientbp.ggblueshark.com",
+            "Connection": "close",
+            "Accept-Encoding": "gzip, deflate, br"
+        }
+
+        response = requests.post(url, headers=headers, data=bytes.fromhex(encrypted_payload), timeout=10)
+
+        if response.status_code == 200:
+            results["success"] += 1
+        else:
+            results["failed"] += 1
     except Exception as e:
-        app.logger.error(f"Exception in send_multiple_requests: {e}")
-        return None
+        print(f"Error sending friend request: {e}")
+        results["failed"] += 1
 
 def create_protobuf(uid):
     try:
         message = uid_generator_pb2.uid_generator()
-        message.saturn_ = int(uid)
+        message.ujjaiwal_ = int(uid)
         message.garena = 1
         return message.SerializeToString()
     except Exception as e:
-        app.logger.error(f"Error creating uid protobuf: {e}")
         return None
 
 def enc(uid):
@@ -168,14 +202,15 @@ def enc(uid):
     encrypted_uid = encrypt_message(protobuf_data)
     return encrypted_uid
 
-def make_request(encrypt, server_name, token):
+async def make_request_async(encrypt, region, token, session):
     try:
-        if server_name == "IND":
+        if region == "IND":
             url = "https://client.ind.freefiremobile.com/GetPlayerPersonalShow"
-        elif server_name in {"BR", "US", "SAC", "NA"}:
+        elif region in {"BR", "US", "SAC", "NA"}:
             url = "https://client.us.freefiremobile.com/GetPlayerPersonalShow"
         else:
             url = "https://clientbp.ggblueshark.com/GetPlayerPersonalShow"
+            
         edata = bytes.fromhex(encrypt)
         headers = {
             'User-Agent': "Dalvik/2.1.0 (Linux; U; Android 9; ASUS_Z01QD Build/PI)",
@@ -188,346 +223,140 @@ def make_request(encrypt, server_name, token):
             'X-GA': "v1 1",
             'ReleaseVersion': "OB50"
         }
-        response = requests.post(url, data=edata, headers=headers, verify=False)
-        hex_data = response.content.hex()
-        binary = bytes.fromhex(hex_data)
-        decode = decode_protobuf(binary)
-        if decode is None:
-            app.logger.error("Protobuf decoding returned None.")
-        return decode
+        
+        async with session.post(url, data=edata, headers=headers, ssl=False, timeout=5) as response:
+            if response.status != 200:
+                return None
+            else:
+                binary = await response.read()
+                return decode_protobuf(binary)
     except Exception as e:
-        app.logger.error(f"Error in make_request: {e}")
         return None
 
 def decode_protobuf(binary):
     try:
-        items = like_count_pb2.Info()
+        items = CSVisit_count_pb2.Info()
         items.ParseFromString(binary)
         return items
-    except DecodeError as e:
-        app.logger.error(f"Error decoding Protobuf data: {e}")
-        return None
     except Exception as e:
-        app.logger.error(f"Unexpected error during protobuf decoding: {e}")
         return None
 
-def authenticate_key(api_key):
-    """Check if API key exists and is valid"""
+def extract_player_info(protobuf_obj):
+    if not protobuf_obj:
+        return None, None, None
+    
     try:
-        key_data = keys_collection.find_one({"key": api_key})
-        if not key_data:
-            return None
-        
-        # Check expiration
-        now = datetime.now()
-        if 'expires_at' in key_data and now > key_data['expires_at']:
-            # Mark as inactive if expired
-            keys_collection.update_one(
-                {"key": api_key},
-                {"$set": {"is_active": False}}
-            )
-            return None
-        
-        # Check if key is active
-        if 'is_active' in key_data and not key_data['is_active']:
-            return None
-        
-        # Check if we need to reset remaining requests (new day)
-        if 'last_reset' in key_data:
-            last_reset = key_data['last_reset']
-            if isinstance(last_reset, str):
-                last_reset = datetime.fromisoformat(last_reset)
-            if last_reset.date() < now.date():
-                keys_collection.update_one(
-                    {"key": api_key},
-                    {"$set": {
-                        "remaining_requests": key_data['total_requests'],
-                        "last_reset": now
-                    }}
-                )
-                key_data['remaining_requests'] = key_data['total_requests']
-        
-        return key_data
+        # Extract information directly from the protobuf object
+        if hasattr(protobuf_obj, 'AccountInfo'):
+            account_info = protobuf_obj.AccountInfo
+            player_name = account_info.PlayerNickname if account_info.PlayerNickname else None
+            player_level = account_info.Levels if account_info.Levels else None
+            player_likes = account_info.Likes if account_info.Likes else None
+            return player_name, player_level, player_likes
+        return None, None, None
     except Exception as e:
-        app.logger.error(f"Error in authenticate_key: {e}")
-        return None
+        return None, None, None
 
-def update_key_usage(api_key, decrement=1):
-    """Decrement remaining requests count for a key only when likes are given"""
-    try:
-        keys_collection.update_one(
-            {"key": api_key},
-            {
-                "$inc": {"remaining_requests": -decrement},
-                "$set": {"last_used": datetime.now()}
-            }
-        )
-    except Exception as e:
-        app.logger.error(f"Error updating key usage: {e}")
+@app.route("/spam", methods=["GET"])
+def send_requests():
+    uid = request.args.get("uid")
+    region = request.args.get("region", "IND").upper()
 
-@app.route('/api/key/create', methods=['POST'])
-def create_key():
+    if not uid:
+        return jsonify({"error": "uid parameter is required"}), 400
+
+    tokens = load_tokens(region)
+    if not tokens:
+        return jsonify({"error": f"No tokens found for region {region}"}), 500
+
+    # Get actual player information using the first token
+    player_info = get_player_info(uid, region, tokens[0])
+    
+    if not player_info:
+        return jsonify({"error": "Failed to get player information"}), 500
+
+    results = {"success": 0, "failed": 0}
+    threads = []
+
+    for token in tokens[:110]:
+        thread = threading.Thread(target=send_friend_request, args=(uid, token, region, results))
+        threads.append(thread)
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    total_requests = results["success"] + results["failed"]
+    status = 1 if results["success"] != 0 else 2
+
+    response_data = {
+        "success_count": results["success"],
+        "failed_count": results["failed"],
+        "PlayerNickname": player_info.AccountInfo.PlayerNickname,
+        "PlayerLevel": player_info.AccountInfo.Levels,
+        "PlayerLikes": player_info.AccountInfo.Likes,
+        "PlayerRegion": player_info.AccountInfo.PlayerRegion,
+        "status": status
+    }
+
+    return jsonify(response_data)
+
+@app.route('/visit', methods=['GET'])
+async def visit():
+    target_uid = request.args.get("uid")
+    region = request.args.get("region", "").upper()
+    
+    if not all([target_uid, region]):
+        return jsonify({"error": "UID and region are required"}), 400
+        
     try:
-        data = request.get_json()
-        custom_key = data.get('custom_key')
-        total_requests = int(data.get('total_requests', 1000))
-        expiry_days = int(data.get('expiry_days', 30))
-        notes = data.get('notes', '')
+        tokens = load_tokens(region)
+        if not tokens:
+            raise Exception("Failed to load tokens.")
+            
+        encrypted_target_uid = enc(target_uid)
+        if encrypted_target_uid is None:
+            raise Exception("Encryption of target UID failed.")
+            
+        total_visits = len(tokens) * 20
+        success_count = 0
+        failed_count = 0
+        player_name = None
+        player_level = None
+        player_likes = None
         
-        if custom_key:
-            if keys_collection.find_one({"key": custom_key}):
-                return jsonify({"error": "Custom key already exists"}), 400
-            api_key = custom_key
-        else:
-            alphabet = string.ascii_letters + string.digits
-            api_key = ''.join(secrets.choice(alphabet) for _ in range(32))
-        
-        expires_at = datetime.now() + timedelta(days=expiry_days)
-        
-        key_doc = {
-            "key": api_key,
-            "created_at": datetime.now(),
-            "expires_at": expires_at,
-            "total_requests": total_requests,
-            "remaining_requests": total_requests,
-            "notes": notes,
-            "is_active": True,
-            "last_reset": datetime.now()
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for token in tokens:
+                for _ in range(20):
+                    tasks.append(make_request_async(encrypted_target_uid, region, token, session))
+            
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for response in responses:
+                if response and isinstance(response, CSVisit_count_pb2.Info):
+                    success_count += 1
+                    # Extract player info from the first successful response
+                    if player_name is None:
+                        player_name, player_level, player_likes = extract_player_info(response)
+                else:
+                    failed_count += 1
+                
+        summary = {
+            "TotalVisits": total_visits,
+            "SuccessfulVisits": success_count,
+            "FailedVisits": failed_count,
+            "PlayerNickname": player_name,
+            "PlayerLevel": player_level,
+            "PlayerLikes": player_likes,
+            "UID": int(target_uid),
+            "TotalResponses": len(responses)
         }
         
-        keys_collection.insert_one(key_doc)
+        return jsonify(summary)
         
-        return jsonify({
-            "message": "API key created successfully",
-            "key": api_key,
-            "expires_at": expires_at.isoformat(),
-            "total_requests": total_requests,
-            "notes": notes
-        }), 201
     except Exception as e:
-        app.logger.error(f"Error creating API key: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/key/check', methods=['GET'])
-def check_key():
-    """Check the status and details of an API key"""
-    try:
-        api_key = request.headers.get('X-API-KEY') or request.args.get('key')
-        if not api_key:
-            return jsonify({"error": "API key is required"}), 401
-        
-        key_data = authenticate_key(api_key)
-        if not key_data:
-            return jsonify({"error": "Invalid or expired API key"}), 403
-        
-        # Remove MongoDB-specific fields before returning
-        key_data.pop('_id', None)
-        
-        # Convert datetime objects to strings
-        if 'created_at' in key_data and isinstance(key_data['created_at'], datetime):
-            key_data['created_at'] = key_data['created_at'].isoformat()
-        if 'expires_at' in key_data and isinstance(key_data['expires_at'], datetime):
-            key_data['expires_at'] = key_data['expires_at'].isoformat()
-        if 'last_reset' in key_data and isinstance(key_data['last_reset'], datetime):
-            key_data['last_reset'] = key_data['last_reset'].isoformat()
-        if 'last_used' in key_data and isinstance(key_data['last_used'], datetime):
-            key_data['last_used'] = key_data['last_used'].isoformat()
-        
-        return jsonify(key_data), 200
-    except Exception as e:
-        app.logger.error(f"Error checking API key: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/key/remove', methods=['DELETE'])
-def remove_key():
-    """Remove an API key (mark as inactive)"""
-    try:
-        api_key = request.headers.get('X-API-KEY') or request.args.get('key')
-        if not api_key:
-            return jsonify({"error": "API key is required"}), 401
-        
-        # First authenticate the key
-        key_data = authenticate_key(api_key)
-        if not key_data:
-            return jsonify({"error": "Invalid or expired API key"}), 403
-        
-        # Mark the key as inactive instead of deleting it
-        result = keys_collection.update_one(
-            {"key": api_key},
-            {"$set": {"is_active": False}}
-        )
-        
-        if result.modified_count == 1:
-            return jsonify({"message": "API key deactivated successfully"}), 200
-        else:
-            return jsonify({"error": "Failed to deactivate API key"}), 400
-    except Exception as e:
-        app.logger.error(f"Error removing API key: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/key/update', methods=['PUT'])
-def update_key():
-    """Update an API key's properties"""
-    try:
-        api_key = request.headers.get('X-API-KEY') or request.args.get('key')
-        if not api_key:
-            return jsonify({"error": "API key is required"}), 401
-        
-        # First authenticate the key
-        key_data = authenticate_key(api_key)
-        if not key_data:
-            return jsonify({"error": "Invalid or expired API key"}), 403
-        
-        data = request.get_json()
-        update_fields = {}
-        
-        if 'total_requests' in data:
-            try:
-                total_requests = int(data['total_requests'])
-                update_fields['total_requests'] = total_requests
-                # Also update remaining_requests if increasing total_requests
-                if total_requests > key_data.get('total_requests', 0):
-                    update_fields['remaining_requests'] = total_requests - (key_data.get('total_requests', 0) - key_data.get('remaining_requests', 0))
-            except ValueError:
-                return jsonify({"error": "total_requests must be an integer"}), 400
-        
-        if 'expiry_days' in data:
-            try:
-                expiry_days = int(data['expiry_days'])
-                new_expiry = datetime.now() + timedelta(days=expiry_days)
-                update_fields['expires_at'] = new_expiry
-            except ValueError:
-                return jsonify({"error": "expiry_days must be an integer"}), 400
-        
-        if 'is_active' in data:
-            update_fields['is_active'] = bool(data['is_active'])
-        
-        if 'notes' in data:
-            update_fields['notes'] = str(data['notes'])
-        
-        if not update_fields:
-            return jsonify({"error": "No valid fields to update"}), 400
-        
-        result = keys_collection.update_one(
-            {"key": api_key},
-            {"$set": update_fields}
-        )
-        
-        if result.modified_count == 1:
-            return jsonify({"message": "API key updated successfully"}), 200
-        else:
-            return jsonify({"error": "No changes made to API key"}), 400
-    except Exception as e:
-        app.logger.error(f"Error updating API key: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/like', methods=['GET'])
-def handle_requests():
-    api_key = request.headers.get('X-API-KEY') or request.args.get('key')
-    if not api_key:
-        return jsonify({"error": "API key is required"}), 401
-    
-    key_data = authenticate_key(api_key)
-    if not key_data:
-        return jsonify({"error": "Invalid or expired API key"}), 403
-    
-    # Check remaining requests
-    if key_data.get('remaining_requests', 0) <= 0:
-        return jsonify({
-            "error": "No remaining requests",
-            "status": 0,
-            "next_reset": (datetime.now() + timedelta(days=1)).replace(hour=0, minute=0, second=0).isoformat()
-        }), 429
-    
-    uid = request.args.get("uid")
-    server_name = request.args.get("server_name", "").upper()
-    if not uid or not server_name:
-        return jsonify({"error": "UID and server_name are required"}), 400
-
-    try:
-        def process_request():
-            tokens = load_tokens(server_name)
-            if tokens is None:
-                raise Exception("Failed to load tokens.")
-            token = tokens[0]['token']
-            encrypted_uid = enc(uid)
-            if encrypted_uid is None:
-                raise Exception("Encryption of UID failed.")
-
-            # First request to get initial data
-            before = make_request(encrypted_uid, server_name, token)
-            if before is None:
-                raise Exception("Failed to retrieve initial player info.")
-            
-            try:
-                jsone = MessageToJson(before)
-                data_before = json.loads(jsone)
-                account_info = data_before.get('AccountInfo', {})
-                before_like = int(account_info.get('Likes', 0))
-                player_level = int(account_info.get('Level', 0))
-            except Exception as e:
-                raise Exception(f"Error processing before data: {str(e)}")
-
-            # Determine the correct URL for likes
-            if server_name == "IND":
-                url = "https://client.ind.freefiremobile.com/LikeProfile"
-            elif server_name in {"BR", "US", "SAC", "NA"}:
-                url = "https://client.us.freefiremobile.com/LikeProfile"
-            else:
-                url = "https://clientbp.ggblueshark.com/LikeProfile"
-
-            # Send like requests
-            asyncio.run(send_multiple_requests(uid, server_name, url))
-
-            # Second request to get updated data
-            after = make_request(encrypted_uid, server_name, token)
-            if after is None:
-                raise Exception("Failed to retrieve player info after like requests.")
-            
-            try:
-                jsone_after = MessageToJson(after)
-                data_after = json.loads(jsone_after)
-                account_info_after = data_after.get('AccountInfo', {})
-                after_like = int(account_info_after.get('Likes', 0))
-                player_uid = int(account_info_after.get('UID', 0))
-                player_name = str(account_info_after.get('PlayerNickname', ''))
-                like_given = after_like - before_like
-                player_level = int(account_info_after.get('Level', 0))
-            except Exception as e:
-                raise Exception(f"Error processing after data: {str(e)}")
-            
-            # Determine status and update key usage
-            if like_given > 0:
-                status = 1
-                update_key_usage(api_key, 1)  # Always decrement by 1 when likes are given
-            else:
-                status = 2
-            
-            # Get updated key info
-            updated_key_data = authenticate_key(api_key)
-            if not updated_key_data:
-                raise Exception("Failed to retrieve updated key info")
-            
-            response = {
-                "response": {
-                    "KeyExpiresAt": updated_key_data['expires_at'].isoformat(),
-                    "KeyRemainingRequests": f"{updated_key_data['remaining_requests']}/{updated_key_data['total_requests']}",
-                    "LikesGivenByAPI": like_given,
-                    "LikesafterCommand": after_like,
-                    "LikesbeforeCommand": before_like,
-                    "PlayerNickname": player_name,
-                    "UID": player_uid
-                },
-                "status": status
-            }
-            
-            return response
-
-        result = process_request()
-        return jsonify(result)
-    except Exception as e:
-        app.logger.error(f"Error processing request: {e}")
-        return jsonify({"error": str(e), "status": 0}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)

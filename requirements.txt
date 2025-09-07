@@ -1,9 +1,5 @@
-Flask[async]
-pymongo
-requests
-aiohttp
-googleapis-common-protos
+flask[async]
 pycryptodome
+aiohttp
+urllib3
 protobuf
-Werkzeug
-apscheduler
