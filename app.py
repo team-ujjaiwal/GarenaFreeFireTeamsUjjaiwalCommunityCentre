@@ -21,23 +21,6 @@ region_urls = {
 }
 default_url = "https://clientbp.ggblueshark.com/"
 
-# All available items
-all_items = [
-    909038002, 909047003, 909047015, 909047019, 909547001,
-    911004701, 912047002, 914047001, 922044002, 1001000001,
-    1001000002, 1001000003, 1001000004, 1001000005, 1001000006,
-    1001000007, 1001000008, 1001000009, 1001000010, 1001000011,
-    1001000012, 1001000013, 1001000014, 1001000015, 1001000016,
-    1001000017, 1001000018, 1001000019, 1001000020, 1001000021,
-    1001000022, 1001000023, 1001000024, 1001000025, 1001000026,
-    1001000027, 1001000028, 1001000029, 1001000030, 1001000031,
-    1001000032, 1001000033, 1001000034, 1001000035, 1001000036,
-    1001000037, 1001000038, 1001000039, 1001000040, 1001000041,
-    1001000042, 1001000043, 1001000044, 1001000045, 801000020, 
-    801000015, 801000016, 827001001, 801000213, 801000144, 
-    801000140, 801000139, 801000089
-]
-
 def encrypt_aes(hex_data):
     cipher = AES.new(key, AES.MODE_CBC, iv)
     padded_data = pad(bytes.fromhex(hex_data), AES.block_size)
@@ -88,16 +71,10 @@ def add_to_wishlist():
         return jsonify({"error": "Items parameter is required!"}), 400
     
     try:
-        # Handle range syntax (e.g., "1-15")
-        if '-' in items_param:
-            start, end = map(int, items_param.split('-'))
-            items_to_send = all_items[start-1:end]  # Convert 1-based to 0-based indexing
-        else:
-            # Handle comma-separated list
-            item_indices = [int(i.strip()) for i in items_param.split(',')]
-            items_to_send = [all_items[i-1] for i in item_indices]  # Convert 1-based to 0-based indexing
-    except (ValueError, IndexError):
-        return jsonify({"error": "Invalid items format! Use comma-separated indices or range (e.g., 1,2,3 or 1-15)"}), 400
+        # Parse comma-separated item IDs
+        items_to_send = [int(item_id.strip()) for item_id in items_param.split(',')]
+    except ValueError:
+        return jsonify({"error": "Invalid items format! Use comma-separated item IDs (e.g., 1315000008,1315000016)"}), 400
     
     threads = []
     results = []
@@ -118,12 +95,16 @@ def add_to_wishlist():
     if success_count == len(results):
         return jsonify({
             "message": f"All {success_count} items have been successfully added to the wishlist",
-            "region": region
+            "region": region,
+            "items_added": items_to_send
         }), 200
     else:
+        failed_items = [item_id for status, item_id in results if status != 200]
         return jsonify({
             "error": f"Only {success_count} out of {len(results)} items were added successfully",
-            "region": region
+            "region": region,
+            "failed_items": failed_items,
+            "successful_items": success_count
         }), 207
 
 if __name__ == "__main__":
