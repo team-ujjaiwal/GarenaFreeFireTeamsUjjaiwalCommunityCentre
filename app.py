@@ -11,16 +11,6 @@ app = Flask(__name__)
 key = "Yg&tc%DEuh6%Zc^8".encode()
 iv = "6oyZDr22E3ychjM%".encode()
 
-# Region URLs mapping
-region_urls = {
-    "IND": "https://client.ind.freefiremobile.com/",
-    "BR": "https://client.br.freefiremobile.com/",
-    "US": "https://client.us.freefiremobile.com/",
-    "SAC": "https://client.sac.freefiremobile.com/",
-    "NA": "https://client.na.freefiremobile.com/",
-}
-default_url = "https://clientbp.ggblueshark.com/"
-
 def encrypt_aes(hex_data):
     cipher = AES.new(key, AES.MODE_CBC, iv)
     padded_data = pad(bytes.fromhex(hex_data), AES.block_size)
@@ -35,9 +25,9 @@ def wishlistItems_payload(id):
     encrypted_data = encrypt_aes(hex_data)
     return encrypted_data
 
-def add_item(token, encrypted_payload, item_id, region):
-    base_url = region_urls.get(region.upper(), default_url)
-    api = f"{base_url}ChangeWishListItem"
+def add_item(token, encrypted_payload, item_id):
+    # Use the direct endpoint from the original code
+    api = "https://clientbp.ggblueshark.com/ChangeWishListItem"
     
     headers = {
         'User-Agent': "Dalvik/2.1.0 (Linux; U; Android 9; ASUS_Z01QD Build/PI)",
@@ -53,14 +43,13 @@ def add_item(token, encrypted_payload, item_id, region):
     
     try:
         response = requests.post(api, data=bytes.fromhex(encrypted_payload), headers=headers, verify=False, timeout=10)
-        return response.status_code, item_id
+        return response.status_code, item_id, response.text
     except Exception as e:
-        return 500, item_id
+        return 500, item_id, str(e)
 
 @app.route('/add_wishlist', methods=['GET'])
 def add_to_wishlist():
     token = request.args.get('token')
-    region = request.args.get('region', 'IND')
     items_param = request.args.get('items', '')
     
     if not token:
@@ -82,7 +71,7 @@ def add_to_wishlist():
     for item_id in items_to_send:
         encrypted_payload = wishlistItems_payload(item_id)
         thread = threading.Thread(
-            target=lambda i=item_id, p=encrypted_payload: results.append(add_item(token, p, i, region))
+            target=lambda i=item_id, p=encrypted_payload: results.append(add_item(token, p, i))
         )
         threads.append(thread)
         thread.start()
@@ -90,21 +79,30 @@ def add_to_wishlist():
     for thread in threads:
         thread.join()
 
-    success_count = sum(1 for status, _ in results if status == 200)
+    success_count = sum(1 for status, _, _ in results if status == 200)
+    
+    # Debug information
+    debug_info = []
+    for status, item_id, response_text in results:
+        debug_info.append({
+            "item_id": item_id,
+            "status": status,
+            "response": response_text[:100] + "..." if len(response_text) > 100 else response_text
+        })
     
     if success_count == len(results):
         return jsonify({
             "message": f"All {success_count} items have been successfully added to the wishlist",
-            "region": region,
-            "items_added": items_to_send
+            "items_added": items_to_send,
+            "debug": debug_info
         }), 200
     else:
-        failed_items = [item_id for status, item_id in results if status != 200]
+        failed_items = [item_id for status, item_id, _ in results if status != 200]
         return jsonify({
             "error": f"Only {success_count} out of {len(results)} items were added successfully",
-            "region": region,
             "failed_items": failed_items,
-            "successful_items": success_count
+            "successful_items": success_count,
+            "debug": debug_info
         }), 207
 
 if __name__ == "__main__":
